@@ -7,43 +7,105 @@
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <link rel="stylesheet" href="/ui/bootstrap.min.css">
     <style>
-  html, body, .container {
-    height: 100%;
-}
-.container {
-    display: table;
-    vertical-align: middle;
-}
-.vertical-center-row {
-    display: table-cell;
-    vertical-align: middle;
-}
-img{
-        cursor: pointer;
-}
+  img{ cursor: pointer; }
     </style>
   </head>
   <body>
-    <div class="container">
-      <div class="vertical-center-row">
-        <div class="row">
-          <div class="col-lg-12">
-              <p style="font-size:168px">
-              <a style="text-decoration: none" href="https://azure.microsoft.com/?WT.mc_id=academic-77460-alfredodeza">🚀</a>
-              </p>
-            <div class="bs-component">
-              <h2>Containerized Python API
-              </h2>
-              <p>This is a containerized application that exposes a JSON API using <a href="https://fastapi.tiangolo.com/">FastAPI</a> with <a href="https://azure.microsoft.com/?WT.mc_id=academic-0000-alfredodeza">Azure!</a></p>
-              <p>Use the buttons below to make use of the interactive (OpenAPI) documentation for trying out the API dynamically.
-                or browse the project source.
-              </p>
-              <button onclick="window.location.href='/docs'" type="button" class="btn btn-info">Try it out</button>
-              <button onclick="window.location.href='https://github.com/microsoft/codespaces-project-template-py/'" type="button" class="btn btn-info">Project source</button>
-            </div>
-          </div>
-        </div>
+    <div class="container mt-4">
+      <h2>Containerized Python API</h2>
+      <p>This is a containerized application that exposes a JSON API using <a href="https://fastapi.tiangolo.com/">FastAPI</a>.</p>
+      <button onclick="window.location.href='/docs'" type="button" class="btn btn-info mb-4">Try it out (API docs)</button>
+
+      <h3>Recipes</h3>
+
+      <!-- Recipe list -->
+      <div id="recipe-list"></div>
+
+      <!-- Recipe detail -->
+      <div id="recipe-detail" style="display:none;">
+        <hr>
+        <h4 id="detail-name"></h4>
+        <p><strong>Ingredients:</strong> <span id="detail-ingredients"></span></p>
+        <p><strong>Instructions:</strong> <span id="detail-instructions"></span></p>
+        <button id="delete-btn" type="button" class="btn btn-danger">Delete</button>
+        <button onclick="showList()" type="button" class="btn btn-secondary ml-2">Back to list</button>
       </div>
+
+      <!-- Add recipe form -->
+      <hr>
+      <h5>Add a Recipe</h5>
+      <form id="add-form" class="mb-4">
+        <div class="form-group">
+          <input id="r-name" class="form-control mb-2" placeholder="Recipe name" required>
+          <input id="r-ingredients" class="form-control mb-2" placeholder="Ingredients" required>
+          <input id="r-instructions" class="form-control mb-2" placeholder="Instructions" required>
+          <button type="submit" class="btn btn-primary">Add Recipe</button>
+        </div>
+      </form>
     </div>
+
+    <script>
+      let currentId = null;
+
+      async function loadRecipes() {
+        const res = await fetch('/recipes');
+        const recipes = await res.json();
+        const list = document.getElementById('recipe-list');
+        if (recipes.length === 0) {
+          list.innerHTML = '<p class="text-muted">No recipes yet.</p>';
+          return;
+        }
+        list.innerHTML = '<ul class="list-group mb-3">' +
+          recipes.map(r =>
+            `<li class="list-group-item list-group-item-action" style="cursor:pointer" onclick="showDetail(${r.id})">${r.name}</li>`
+          ).join('') + '</ul>';
+      }
+
+      async function showDetail(id) {
+        const res = await fetch(`/recipes/${id}`);
+        if (!res.ok) { alert('Recipe not found'); loadRecipes(); return; }
+        const r = await res.json();
+        currentId = r.id;
+        document.getElementById('detail-name').textContent = r.name;
+        document.getElementById('detail-ingredients').textContent = r.ingredients;
+        document.getElementById('detail-instructions').textContent = r.instructions;
+        document.getElementById('recipe-list').style.display = 'none';
+        document.getElementById('recipe-detail').style.display = '';
+      }
+
+      function showList() {
+        document.getElementById('recipe-detail').style.display = 'none';
+        document.getElementById('recipe-list').style.display = '';
+        loadRecipes();
+      }
+
+      document.getElementById('delete-btn').addEventListener('click', async () => {
+        if (!currentId) return;
+        const res = await fetch(`/recipes/${currentId}`, { method: 'DELETE' });
+        if (res.ok || res.status === 204) {
+          showList();
+        } else {
+          alert('Failed to delete recipe');
+        }
+      });
+
+      document.getElementById('add-form').addEventListener('submit', async (e) => {
+        e.preventDefault();
+        const body = {
+          name: document.getElementById('r-name').value,
+          ingredients: document.getElementById('r-ingredients').value,
+          instructions: document.getElementById('r-instructions').value
+        };
+        const res = await fetch('/recipes', { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify(body) });
+        if (res.ok) {
+          e.target.reset();
+          loadRecipes();
+        } else {
+          alert('Failed to add recipe');
+        }
+      });
+
+      loadRecipes();
+    </script>
   </body>
 </html>
