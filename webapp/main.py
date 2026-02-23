@@ -7,6 +7,7 @@ from fastapi import FastAPI, HTTPException
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
+from webapp.utils import db_session
 
 current_dir = dirname(abspath(__file__))
 static_path = join(current_dir, "static")
@@ -66,17 +67,15 @@ def generate(body: Body):
 
 @app.get('/recipes')
 def list_recipes():
-    conn = get_db()
-    rows = conn.execute("SELECT * FROM recipes").fetchall()
-    conn.close()
+    with db_session(get_db) as conn:
+        rows = conn.execute("SELECT * FROM recipes").fetchall()
     return [dict(row) for row in rows]
 
 
 @app.get('/recipes/{recipe_id}')
 def get_recipe(recipe_id: int):
-    conn = get_db()
-    row = conn.execute("SELECT * FROM recipes WHERE id = ?", (recipe_id,)).fetchone()
-    conn.close()
+    with db_session(get_db) as conn:
+        row = conn.execute("SELECT * FROM recipes WHERE id = ?", (recipe_id,)).fetchone()
     if row is None:
         raise HTTPException(status_code=404, detail="Recipe not found")
     return dict(row)
@@ -84,25 +83,21 @@ def get_recipe(recipe_id: int):
 
 @app.post('/recipes', status_code=201)
 def create_recipe(recipe: Recipe):
-    conn = get_db()
-    cursor = conn.execute(
-        "INSERT INTO recipes (name, ingredients, instructions) VALUES (?, ?, ?)",
-        (recipe.name, recipe.ingredients, recipe.instructions)
-    )
-    conn.commit()
-    new_id = cursor.lastrowid
-    conn.close()
+    with db_session(get_db) as conn:
+        cursor = conn.execute(
+            "INSERT INTO recipes (name, ingredients, instructions) VALUES (?, ?, ?)",
+            (recipe.name, recipe.ingredients, recipe.instructions)
+        )
+        conn.commit()
+        new_id = cursor.lastrowid
     return {"id": new_id, "name": recipe.name, "ingredients": recipe.ingredients, "instructions": recipe.instructions}
 
 
 @app.delete('/recipes/{recipe_id}', status_code=204)
 def delete_recipe(recipe_id: int):
-    conn = get_db()
-    try:
+    with db_session(get_db) as conn:
         row = conn.execute("SELECT id FROM recipes WHERE id = ?", (recipe_id,)).fetchone()
         if row is None:
             raise HTTPException(status_code=404, detail="Recipe not found")
         conn.execute("DELETE FROM recipes WHERE id = ?", (recipe_id,))
         conn.commit()
-    finally:
-        conn.close()
